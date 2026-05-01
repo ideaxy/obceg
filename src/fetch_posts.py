@@ -1,7 +1,25 @@
 import os
 import json
+import re
 import httpx
 from datetime import datetime, timezone, timedelta
+
+def extract_image_urls(html_content: str) -> list:
+    """从HTML内容中提取图片URL"""
+    if not html_content:
+        return []
+    
+    img_urls = []
+    
+    lightbox_matches = re.findall(r'href="(https://ask\.oceanbase\.com/uploads/default/original/[^"]+\.png)"', html_content)
+    img_urls.extend(lightbox_matches)
+    
+    src_matches = re.findall(r'src="(https://ask\.oceanbase\.com/uploads/default/optimized/[^"]+\.png)"', html_content)
+    for url in src_matches:
+        if url not in img_urls:
+            img_urls.append(url)
+    
+    return img_urls
 
 def fetch_post_content(topic_id: int) -> dict:
     url = f"https://ask.oceanbase.com/t/{topic_id}.json"
@@ -18,14 +36,19 @@ def fetch_post_content(topic_id: int) -> dict:
     
     if posts:
         first_post = posts[0]
+        raw_content = first_post.get("cooked", "")
+        image_urls = extract_image_urls(raw_content)
+        
         return {
             "topic_id": topic_id,
             "title": data.get("title"),
-            "content": first_post.get("cooked"),
+            "content": raw_content,
             "author": first_post.get("name"),
-            "username": first_post.get("username")
+            "username": first_post.get("username"),
+            "url": f"https://ask.oceanbase.com/t/topic/{topic_id}",
+            "image_urls": image_urls
         }
-    return {"topic_id": topic_id, "error": "No posts found"}
+    return {"topic_id": topic_id, "error": "No posts found", "url": f"https://ask.oceanbase.com/t/topic/{topic_id}"}
 
 def fetch_today_posts():
     tz_shanghai = timezone(timedelta(hours=8))
